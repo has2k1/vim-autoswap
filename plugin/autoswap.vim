@@ -33,6 +33,10 @@ if !exists("g:autoswap_detect_tmux")
 	let g:autoswap_detect_tmux = 0
 endif
 
+if !exists('g:autoswap_show_diff')
+  let g:autoswap_show_diff = 1
+endif
+
 " Preserve external compatibility options, then enable full vim compatibility...
 let s:save_cpo = &cpo
 set cpo&vim
@@ -62,9 +66,14 @@ function! AS_HandleSwapfile (filename, swapname)
 		call AS_DelayedMsg('Old swapfile detected... and deleted')
 		call delete(v:swapname)
 		let v:swapchoice = 'e'
-
-	" Otherwise, open file read-only...
-	else
+   " If option is set show the diff
+   elseif (g:autoswap_show_diff == 1)
+		call AS_DelayedMsg('Swapfile detected, showing diff')
+		let v:swapchoice = 'e'
+      let b:swapname = v:swapname
+      call AS_ShowingDiffIfNeeded()
+   " Otherwise, open file read-only...
+   else
 		call AS_DelayedMsg('Swapfile detected, opening read-only')
 		let v:swapchoice = 'o'
 	endif
@@ -88,6 +97,55 @@ function! AS_DelayedMsg (msg)
 		autocmd BufWinEnter *  autocmd!
 		autocmd BufWinEnter *  augroup END
 	augroup END
+endfunction
+
+
+" Open swap file, save it and check if there are
+" differences. If the files are the same notify user and
+" discard file
+"
+function! AS_ShowingDiffIfNeeded()
+
+	augroup AutoSwap_Diff
+		autocmd!
+		" Print the message on finally entering the buffer...
+		autocmd BufWinEnter *  call AS_AutoCmdShowDiff(expand('%:p'))
+
+		" And then remove these autocmds, so it's a "one-shot" deal...
+		autocmd BufWinEnter *  augroup AutoSwap_Diff
+		autocmd BufWinEnter *  autocmd!
+		autocmd BufWinEnter *  augroup END
+	augroup END
+endfunction
+
+function! AS_AutoCmdShowDiff(file)
+   let tempfile = tempname()
+   try
+      exe 'silent recover' fnameescape(a:file)
+   catch /^Vim\%((\a\+)\)\=:E/
+      " Prevent any recovery error from disrupting the diff-split.
+   endtry
+   exe ':silent write ' tempfile
+   call system('cmp -s '. shellescape(a:file, 1).' '.shellescape(tempfile, 1))
+   if v:shell_error == 0 
+      echohl WarningMsg
+		echon "\rNo differences to swap file, discarding...."
+      echohl NONE
+      call delete (b:swapname)
+   else
+      set noswapfile
+      set shortmess+=A
+      try
+         exe 'silent! e!'
+      catch
+      endtry
+      set swapfile
+      echohl WarningMsg
+		echon "\r Found differences to swapfile"
+      echohl NONE
+      exe 'silent vert diffs ' tempfile
+   endif
+   call delete ( tempfile )
 endfunction
 
 
