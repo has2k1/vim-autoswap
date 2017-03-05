@@ -34,7 +34,7 @@ if !exists("g:autoswap_detect_tmux")
 endif
 
 if !exists('g:autoswap_show_diff')
-  let g:autoswap_show_diff = 1
+	let g:autoswap_show_diff = 1
 endif
 
 " Preserve external compatibility options, then enable full vim compatibility...
@@ -66,16 +66,17 @@ function! AS_HandleSwapfile (filename, swapname)
 		call AS_DelayedMsg('Old swapfile detected... and deleted')
 		call delete(v:swapname)
 		let v:swapchoice = 'e'
-   " If option is set show the diff
-   elseif (g:autoswap_show_diff == 1)
+
+        " If option is set show the diff
+	elseif (g:autoswap_show_diff == 1)
 		call AS_DelayedMsg('Swapfile detected, showing diff')
 		let v:swapchoice = 'e'
-      let b:swapname = v:swapname
-      call AS_ShowingDiffIfNeeded()
-   " Otherwise, open file read-only...
-   else
-		call AS_DelayedMsg('Swapfile detected, opening read-only')
-		let v:swapchoice = 'o'
+		let b:swapname = v:swapname
+		call AS_ShowingDiffIfNeeded()
+	" Otherwise, recover file
+	else
+		call AS_DelayedMsg('Swapfile detected, recovering file')
+		let v:swapchoice = 'r'
 	endif
 endfunction
 
@@ -119,33 +120,37 @@ function! AS_ShowingDiffIfNeeded()
 endfunction
 
 function! AS_AutoCmdShowDiff(file)
-   let tempfile = tempname()
-   try
-      exe 'silent recover' fnameescape(a:file)
-   catch /^Vim\%((\a\+)\)\=:E/
-      " Prevent any recovery error from disrupting the diff-split.
-   endtry
-   exe ':silent write ' tempfile
-   call system('cmp -s '. shellescape(a:file, 1).' '.shellescape(tempfile, 1))
-   if v:shell_error == 0 
-      echohl WarningMsg
-		echon "\rNo differences to swap file, discarding...."
-      echohl NONE
-      call delete (b:swapname)
-   else
-      set noswapfile
-      set shortmess+=A
-      try
-         exe 'silent! e!'
-      catch
-      endtry
-      set swapfile
-      echohl WarningMsg
-		echon "\r Found differences to swapfile"
-      echohl NONE
-      exe 'silent vert diffs ' tempfile
-   endif
-   call delete ( tempfile )
+	let tempfile = tempname()
+	try
+		exe 'silent recover' fnameescape(a:file)
+	catch /^Vim\%((\a\+)\)\=:E/
+		" Prevent any recovery error from disrupting the diff-split.
+	endtry
+
+	" Compare file with recovered swapfile
+	exe ':silent write ' tempfile
+	call system('cmp -s '. shellescape(a:file, 1).' '.shellescape(tempfile, 1))
+
+	" If no diffrences delete swap, otherwise do a diff
+	if v:shell_error == 0
+		echohl WarningMsg
+			echon "\rNo differences to swap file, discarding...."
+		echohl NONE
+		call delete (b:swapname)
+	else
+		set noswapfile
+		set shortmess+=A
+		try
+			exe 'silent! e!'
+		catch
+		endtry
+		set swapfile
+		echohl WarningMsg
+			echon "\r Found differences to swapfile"
+		echohl NONE
+		exe 'silent vert diffs ' tempfile
+	endif
+	call delete ( tempfile )
 endfunction
 
 
